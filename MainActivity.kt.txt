@@ -1,0 +1,117 @@
+package com.patta.app
+
+import android.app.Activity
+import android.content.Intent
+import android.graphics.Bitmap
+import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.webkit.*
+import android.widget.Toast
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+
+// ====== இங்க மட்டும் மாத்தினா போதும் ======
+const val SITE_URL = "https://eservices.tn.gov.in/eservicesnew/land/chitta_ta.html"
+const val DEF_DISTRICT = "மயிலாடுதுறை|Mayiladuthurai"
+const val DEF_TALUK = "மயிலாடுதுறை|Mayiladuthurai"
+const val DEF_VILLAGE = "வில்லியநல்லூர்|Villiyanallur|Villianallur|Viliyanallur|Villiyanalloor"
+const val DEF_AREA = "ஊரகம்|Rural|கிராமப்புறம்"
+const val DEF_PHONE = "7339499470"
+// ==========================================
+
+class MainActivity : Activity() {
+    private lateinit var web: WebView
+    private val handler = Handler(Looper.getMainLooper())
+
+    private val autofillJs = """
+    (function(){
+      if (window.__pattaTimer) clearInterval(window.__pattaTimer);
+      var D="$DEF_DISTRICT".split("|"), T="$DEF_TALUK".split("|"), V="$DEF_VILLAGE".split("|"), R="$DEF_AREA".split("|"), PH="$DEF_PHONE";
+      var tries=0;
+      function labelOf(el){
+        var t=(el.id||"")+" "+(el.name||"")+" "+(el.getAttribute("aria-label")||"");
+        if(el.id){var l=document.querySelector('label[for="'+el.id+'"]'); if(l) t+=" "+l.innerText;}
+        var p=el.closest("div,td,li"); if(p) t+=" "+(p.innerText||"").slice(0,60);
+        return t.toLowerCase();
+      }
+      function setSel(s,names){
+        for(var i=0;i<s.options.length;i++){
+          var tx=s.options[i].text.trim().toLowerCase();
+          for(var j=0;j<names.length;j++){
+            if(tx===names[j].toLowerCase()||tx.indexOf(names[j].toLowerCase())>=0){
+              if(s.selectedIndex!==i){ s.selectedIndex=i; s.dispatchEvent(new Event("change",{bubbles:true})); if(window.jQuery) try{jQuery(s).trigger("change");}catch(e){} }
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+      window.__pattaTimer=setInterval(function(){
+        tries++; if(tries>40){clearInterval(window.__pattaTimer);return;}
+        document.querySelectorAll("select").forEach(function(s){
+          var lb=labelOf(s);
+          if(lb.indexOf("rural")>=0||lb.indexOf("ஊரக")>=0||lb.indexOf("area")>=0) setSel(s,R);
+          else if(lb.indexOf("district")>=0||lb.indexOf("மாவட்ட")>=0) setSel(s,D);
+          else if(lb.indexOf("taluk")>=0||lb.indexOf("வட்ட")>=0) setSel(s,T);
+          else if(lb.indexOf("village")>=0||lb.indexOf("ஊர்")>=0||lb.indexOf("கிராம")>=0) setSel(s,V);
+        });
+        document.querySelectorAll("input[type=radio]").forEach(function(r){
+          var t=(r.value||"")+" ";
+          if(r.id){var l=document.querySelector('label[for="'+r.id+'"]'); if(l) t+=l.innerText;}
+          if(r.parentElement) t+=" "+r.parentElement.innerText;
+          t=t.toLowerCase();
+          for(var k=0;k<R.length;k++){ if(t.indexOf(R[k].toLowerCase())>=0){ if(!r.checked) r.click(); break; } }
+        });
+        document.querySelectorAll("input").forEach(function(i){
+          var lb=((i.id||"")+" "+(i.name||"")+" "+(i.placeholder||"")).toLowerCase();
+          if((i.type==="text"||i.type==="tel"||i.type==="number")&&/mobile|phone|மொபைல்|தொலைபேசி|கைப்பேசி/.test(lb)&&i.value!==PH){
+            i.value=PH; i.dispatchEvent(new Event("input",{bubbles:true})); i.dispatchEvent(new Event("change",{bubbles:true}));
+          }
+        });
+      },700);
+    })();
+    """.trimIndent()
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        web = WebView(this)
+        setContentView(web)
+        web.settings.apply {
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            useWideViewPort = true
+            loadWithOverviewMode = true
+            setSupportZoom(true)
+            builtInZoomControls = true
+            displayZoomControls = false
+        }
+        CookieManager.getInstance().setAcceptCookie(true)
+        web.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(v: WebView, url: String, f: Bitmap?) { v.evaluateJavascript(autofillJs, null) }
+            override fun onPageFinished(v: WebView, url: String) { v.evaluateJavascript(autofillJs, null) }
+        }
+        web.setDownloadListener { url, ua, _, mime, _ -> downloadPdf(url, ua, mime) }
+        web.loadUrl(SITE_URL)
+    }
+
+    private fun downloadPdf(url: String, ua: String, mime: String?) {
+        Toast.makeText(this, "PDF எடுக்கிறது...", Toast.LENGTH_SHORT).show()
+        Thread {
+            try {
+                val c = URL(url).openConnection() as HttpURLConnection
+                c.setRequestProperty("User-Agent", ua)
+                CookieManager.getInstance().getCookie(url)?.let { c.setRequestProperty("Cookie", it) }
+                val f = File(cacheDir, "patta.pdf")
+                c.inputStream.use { i -> f.outputStream().use { o -> i.copyTo(o) } }
+                handler.post { startActivity(Intent(this, PdfActivity::class.java).putExtra("path", f.absolutePath)) }
+            } catch (e: Exception) {
+                handler.post { Toast.makeText(this, "PDF எடுக்க முடியல: ${e.message}", Toast.LENGTH_LONG).show() }
+            }
+        }.start()
+    }
+
+    @Deprecated("Deprecated in Java")
+    override fun onBackPressed() { if (web.canGoBack()) web.goBack() else super.onBackPressed() }
+}
