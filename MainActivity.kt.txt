@@ -13,7 +13,7 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 // ====== இங்க மட்டும் மாத்தினா போதும் ======
-const val SITE_URL = "https://eservices.tn.gov.in/eservicesnew/land/chitta_ta.html"
+const val SITE_URL = "https://eservices.tn.gov.in/eservicesnew/home.html"
 const val DEF_DISTRICT = "மயிலாடுதுறை|Mayiladuthurai"
 const val DEF_TALUK = "மயிலாடுதுறை|Mayiladuthurai"
 const val DEF_VILLAGE = "வில்லியநல்லூர்|Villiyanallur|Villianallur|Viliyanallur|Villiyanalloor"
